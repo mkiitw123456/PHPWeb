@@ -1,5 +1,18 @@
 // Filipino (Tagalog) UI. User-authored names and messages are never translated.
 export const filipino: Record<string, string> = {
+  工作空間尚未啟用: "Hindi pa handa ang workspace",
+  "管理員正在設定 Firebase，完成後才會開放帳密登入。":
+    "Sine-set up pa ng admin ang Firebase. Makakapag-sign in kapag handa na.",
+  "圖片會存入你授權的 Google Drive 專用資料夾，檔案不會公開分享。":
+    "Ise-save ang mga larawan sa nakalaang folder sa Google Drive na pinahintulutan mo. Hindi pampubliko ang mga file.",
+  "Google Drive 已連接": "Nakakonekta ang Google Drive",
+  "Google Drive 尚未連接": "Hindi pa nakakonekta ang Google Drive",
+  "重新授權 Google Drive": "Muling pahintulutan ang Google Drive",
+  "連接 Google Drive": "Ikonekta ang Google Drive",
+  "只有管理員需要授權 Google；一般成員使用聊天室帳號即可。":
+    "Admin lang ang kailangang magbigay ng pahintulot sa Google. Chat account lang ang kailangan ng mga miyembro.",
+  "示範模式不會連接你的雲端硬碟。":
+    "Hindi ikokonekta ng demo ang iyong Google Drive.",
   關閉視窗: "Isara ang window",
   "歡迎回到 Harbor": "Maligayang pagbabalik sa Harbor",
   "跨越海域，讓合作更簡單。": "Mas madaling pagtutulungan, saanman naroon.",
@@ -36,8 +49,8 @@ export const filipino: Record<string, string> = {
   儲存權限: "I-save ang access",
   "帳號已建立，請私下提供帳密給成員。":
     "Nagawa na ang account. Ibigay nang pribado ang email at password sa miyembro.",
-  "示範成員已建立；密碼不會保存，正式登入需連接 Supabase。":
-    "Nagawa na ang demo account. Hindi sine-save ang password. Kailangan ang Supabase para sa tunay na pag-sign in.",
+  "示範成員已建立；密碼不會保存，正式登入需連接 Firebase。":
+    "Nagawa na ang demo account. Hindi sine-save ang password. Kailangan ang Firebase para sa tunay na pag-sign in.",
   顯示名稱: "Pangalan sa chat",
   "例如：Miguel": "Halimbawa: Miguel",
   初始密碼: "Paunang password",
@@ -47,12 +60,12 @@ export const filipino: Record<string, string> = {
   "建立中…": "Ginagawa…",
   "新訊息會送出通知，讓還在使用 Discord 的夥伴也能跟上進度。":
     "Magpapadala ng notification kapag may bagong mensahe para sa mga kasamahan na gumagamit pa ng Discord.",
-  "伺服器端串接已備妥，請在 Supabase 設定 DISCORD_WEBHOOK_URL。":
-    "Handa na ang server integration. Itakda ang DISCORD_WEBHOOK_URL sa Supabase.",
+  "伺服器端串接已備妥，請在 Vercel 設定 DISCORD_WEBHOOK_URL。":
+    "Handa na ang server integration. Itakda ang DISCORD_WEBHOOK_URL sa Vercel.",
   "目前為本機示範，尚未連接通知服務。":
     "Lokal na demo ito. Hindi pa nakakonekta ang notification service.",
-  "Webhook 網址僅存於 Supabase Secrets。通知只包含「有新訊息」與工作空間連結，不轉送私人文字、圖片或類別名稱。":
-    "Nasa Supabase Secrets lamang ang webhook URL. Abiso at link lang ang ipinapadala, hindi ang pribadong mensahe, larawan, o pangalan ng kategorya.",
+  "Webhook 網址僅存於 Vercel Secrets。通知只包含「有新訊息」與工作空間連結，不轉送私人文字、圖片或類別名稱。":
+    "Nasa Vercel Secrets lamang ang webhook URL. Abiso at link lang ang ipinapadala, hindi ang pribadong mensahe, larawan, o pangalan ng kategorya.",
   "設定步驟請見專案 README.md。通知失敗時，聊天訊息仍會保存。":
     "Tingnan ang README.md para sa pag-setup. Naka-save pa rin ang mensahe kahit hindi maipadala ang notification.",
   本機示範: "Lokal na demo",
@@ -109,7 +122,7 @@ export const filipino: Record<string, string> = {
   收合成員列表: "Itago ang mga miyembro",
   關閉成員列表: "Isara ang mga miyembro",
   你: "Ikaw",
-  "連接 Supabase 後啟用多人聊天": "Ikonekta ang Supabase para sa team chat",
+  "連接 Firebase 後啟用多人聊天": "Ikonekta ang Firebase para sa team chat",
   訊息與圖片依類別權限保護: "Protektado ang mensahe at larawan ayon sa access",
   管理工作空間: "Pamahalaan ang workspace",
   建立文字頻道: "Gumawa ng text channel",
@@ -142,8 +155,8 @@ export const filipino: Record<string, string> = {
     "Na-convert na sa WebP. Hanggang 1000 × 600 ang preview at hindi binabago ang proporsyon. Ia-upload lamang kapag kinumpirma.",
   "上傳中…": "Ina-upload…",
   確認上傳: "Kumpirmahin ang upload",
-  "清除這台瀏覽器內的示範訊息與設定，恢復初始示範對話。這不會影響 Supabase 資料。":
-    "Buburahin ang demo sa browser na ito at ibabalik ang panimulang usapan. Hindi maaapektuhan ang data sa Supabase.",
+  "清除這台瀏覽器內的示範訊息與設定，恢復初始示範對話。這不會影響 Firebase 資料。":
+    "Buburahin ang demo sa browser na ito at ibabalik ang panimulang usapan. Hindi maaapektuhan ang data sa Firebase.",
   確認重設: "Kumpirmahin ang pag-reset",
   圖片檢視: "Tingnan ang larawan",
   放大聊天圖片: "Pinalaking larawan sa chat",

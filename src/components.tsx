@@ -7,7 +7,7 @@ import {
   ArrowUpRight,
   LoaderCircle,
 } from "lucide-react";
-import { db, check } from "./api";
+import { login, loadImage } from "./api";
 import type { Profile } from "./types";
 export function Avatar({ person }: { person?: Profile }) {
   return (
@@ -97,11 +97,7 @@ export function Login({ onLogin }: { onLogin: () => void }) {
           setError("");
           const f = new FormData(e.currentTarget);
           try {
-            const result = await db!.auth.signInWithPassword({
-              email: String(f.get("email")),
-              password: String(f.get("password")),
-            });
-            if (result.error) throw result.error;
+            await login(String(f.get("email")), String(f.get("password")));
             onLogin();
           } catch {
             setError(t("登入失敗，請確認帳號密碼或網路連線。"));
@@ -148,6 +144,9 @@ export function ChatImage({
   const ref = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     let live = true;
+    let objectUrl = "";
+    setSrc("");
+    setError(false);
     const io = new IntersectionObserver((entries) => {
       if (!entries[0].isIntersecting) return;
       io.disconnect();
@@ -155,20 +154,22 @@ export function ChatImage({
         setSrc(path);
         return;
       }
-      db!.storage
-        .from("chat-images")
-        .createSignedUrl(path, 300)
-        .then((r) => {
+      loadImage(path)
+        .then((url) => {
           if (live) {
-            if (r.error) setError(true);
-            else setSrc(r.data.signedUrl);
-          }
+            objectUrl = url;
+            setSrc(url);
+          } else URL.revokeObjectURL(url);
+        })
+        .catch(() => {
+          if (live) setError(true);
         });
     });
     if (ref.current) io.observe(ref.current);
     return () => {
       live = false;
       io.disconnect();
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
   }, [path]);
   return (

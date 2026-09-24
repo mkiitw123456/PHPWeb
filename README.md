@@ -1,100 +1,105 @@
 # Harbor 私人工作空間
 
-單一工作空間，供台灣／菲律賓內部夥伴使用。沒有公開註冊、伺服器切換或語音功能。支援繁體中文與 Filipino（Tagalog）；登入頁、側欄與設定可切換語言，偏好儲存在目前瀏覽器。首次使用若瀏覽器偏好 Filipino／Tagalog，會自動選擇 Filipino。訊息、姓名、類別與頻道名稱保留使用者原文，不提供自動翻譯。React + Vite 產生可部署的 HTML/CSS/JS，Supabase 提供 Auth、Postgres、Realtime、私有 Storage 與 Edge Functions。
+台灣／菲律賓內部團隊的單一聊天室。繁體中文與 Filipino（Tagalog）介面；訊息、類別及姓名保留原文。React + Vite 部署 Vercel，Firebase Authentication 管理登入，Firestore 儲存文字／權限並推送訊息，Google Drive 儲存圖片。不使用 Firebase Storage、Firebase Functions 或 Supabase。
 
-## 本機啟動
+## 功能與資料流
 
-需要 Node.js 22.12 以上（目前以 Node 24 測試）。
+- 管理員建立使用者／打手帳號及類別權限，頻道繼承類別權限。沒有公開註冊頁。只有後端建立的 profiles 可使用聊天室，自行呼叫 Firebase 註冊 API 取得的 Auth 帳號不會取得工作空間權限。
+- 每則文字最多 4000 字；歷史每頁 40 則，Firestore 監聽可見頻道。提示音可關閉，瀏覽器需要先有使用者互動；關閉網頁不會提示。
+- 貼上／選取 JPG、PNG、WebP，先壓縮 WebP（最大 1600×1200、品質 80%、最多 3 MiB），顯示最大 1000×600 等比例預覽，確認才上傳。僅保存壓縮版，原始輸入最多 20 MiB。
+- Vercel API 驗證 Firebase ID token 和類別權限才上傳／讀取 Google Drive 私人資料夾。Drive 檔案 ID 不傳給瀏覽器，OAuth refresh token 在 Firestore 使用 AES-256-GCM 加密。
+- 圖片捲入畫面後下載，使用當前頁面 blob URL，不建立公開分享連結。Google Drive 容量與 Vercel 傳輸／函式額度分開計算。
+- Discord Webhook 由後端送出通用通知與网站連結，不帶私密文字／圖片。通知失敗不會讓已保存訊息消失。
+- 正式建置缺少 Firebase 設定時顯示「工作空間尚未啟用」，不會自動進入示範管理員。
 
-```powershell
-npm install
-npm run dev
-```
+## 專案與 Firebase 設定
 
-開啟 http://127.0.0.1:5173 。沒有 `.env.local` 時為本機示範，資料只存在此瀏覽器。可從「設定」切換示範角色。示範建立帳號不保存密碼，也不能用於正式登入。不要把示範模式用來存正式資料。
+Firebase project：`harbor-9d3bc`；Firestore Standard、`(default)`、新加坡 `asia-southeast1`。Vercel：`https://php-web-tan.vercel.app`。以下設定實際完成後才能多人使用，儲存庫沒有正式憑證，也不自動建立正式管理員。
 
-## 已實作
-
-- 管理員建立類別、文字頻道。使用者／打手只有獲授權的類別；子頻道繼承。
-- Email + 密碼登入，管理員透過伺服器端 API 建立帳號。
-- 文字聊天（4000 字上限）、Enter 傳送、Shift+Enter 換行，支援中文輸入法。
-- JPG/PNG/WebP 上傳或剪貼簿貼上。先壓縮為 WebP（最大 1600×1200、80% 品質），再顯示最大 1000×600 等比預覽，確認才上傳。原圖最多 20 MB，壓縮結果最多 3 MB。
-- 正式訊息每次載入 40 筆，可往前載入。Realtime 接收新增訊息，分頻道未讀數、提示音開關。
-- 圖片延遲載入、私有儲存桶、5 分鐘短效網址。關閉網站後不會播放聲音；首次互動後瀏覽器才允許聲音，手機背景執行可能被作業系統暫停。
-- Discord Webhook 伺服器端傳送通用通知，避免跨類別洩露聊天文字與圖片。Webhook 不出現在瀏覽器。
-
-## Supabase 設定（需要專案擁有者登入）
-
-1. 在 Supabase Dashboard 建立專案。**Auth → Providers / Sign In 設定關閉 Allow new users to sign up**，停用匿名登入。網站本身沒有註冊入口，關閉服務端註冊也可阻止直接呼叫 API 註冊。
-2. 在 SQL Editor 執行 `supabase/migrations/001_harbor.sql`（全新專案只執行一次）。這會建立資料表、索引、RLS、Storage 規則、預設頻道與 Realtime publication。
-3. 在 Auth → Users 建立第一位管理員，取得其 UUID，再執行以下 SQL，替換 UUID 與名稱：
-
-```sql
-insert into public.profiles(id,name,role)
-values ('YOUR_AUTH_USER_UUID','你的名稱','admin');
-```
-
-4. 將 `.env.example` 複製為 `.env.local`，填入 Project URL 與 anon key（或 publishable key），不要放 service_role / secret key。重新啟動 Vite。正式建置也必須在建置前設定這兩個環境變數。
-5. 以 Supabase CLI 登入並連接專案，部署兩個函式。命令中的 PROJECT_REF 為專案 ID：
+1. Firebase Console → Authentication → Sign-in method，啟用 Email/Password，Email link 和匿名登入保持關閉。
+2. Authentication → Settings → Authorized domains，加入 `php-web-tan.vercel.app`，之後使用自訂網域時同步新增。
+3. Firestore 以正式模式建立，部署本儲存庫規則，不要開放全體讀寫：
 
 ```powershell
-npx supabase login
-npx supabase link --project-ref PROJECT_REF
-npx supabase functions deploy admin-users --no-verify-jwt
-npx supabase functions deploy notify --no-verify-jwt
+npx firebase login
+npx firebase deploy --only firestore:rules,firestore:indexes --project harbor-9d3bc
 ```
 
-這兩個函式會自行以 `auth.getUser(accessToken)` 驗證使用者；admin-users 另外查詢資料庫管理員角色。`--no-verify-jwt` 只停用閘道的舊式 JWT 驗證，並非允許未登入呼叫業務操作，可支援新式 signing keys。
-
-6. 在 Edge Functions → Secrets 設定：
-
-| 名稱                | 內容                                                                               |
-| ------------------- | ---------------------------------------------------------------------------------- |
-| APP_ORIGIN          | 網站完整 origin，例如 https://chat.example.com；本機測試則為 http://127.0.0.1:5173 |
-| DISCORD_WEBHOOK_URL | Discord 頻道的完整 Webhook URL，僅填在 Secrets                                     |
-
-`SUPABASE_URL`、`SUPABASE_SERVICE_ROLE_KEY` 為 Supabase 函式執行環境提供的變數，不能放進前端 `.env.local` 或聊天室。
-
-7. 以管理員登入，在「設定 → 成員、權限與通知串接」建立 Email 帳號、至少 12 字元密碼並勾選類別。初始密碼請透過可信任的私下管道交付；此版密碼重設由管理員在 Supabase Dashboard 處理。
-8. 在 Supabase Auth URL Configuration 設定正式 Site URL。上線後用管理員、使用者、打手三個真實帳號驗證各自可見的類別、私有圖片、Realtime 與 Webhook。
-
-## 部署與網域
-
-### Vercel
-
-1. 在 Vercel 的 New Project 匯入 `mkiitw123456/PHPWeb`，Framework 選 Vite。`vercel.json` 已設定建置命令 `npm run build` 與輸出目錄 `dist`。
-2. 正式上線前在 Environment Variables 填入 `VITE_SUPABASE_URL` 和 `VITE_SUPABASE_ANON_KEY`。前端僅使用 anon／publishable key，不得使用 service_role／secret key。
-3. Deploy 後取得 HTTPS 網址，在 Supabase Auth 設定 Site URL，並把 Edge Functions 的 `APP_ORIGIN` 更新成相同 origin。綁定自訂網域後也要更新這兩處設定。
-4. 若暫時未設定 Supabase 環境變數，部署結果是清楚標示的本機示範模式，無法提供正式多人聊天。Vercel 環境變數變更後需要重新部署。
-
-### 其他靜態主機
+4. Project settings → Your apps → Harbor Web，取得四個前端設定，填到 `.env.local`／Vercel Environment Variables（下表）。Web API key 是公開前端設定，資料保護由規則和後端驗證提供。
+5. Project settings → Service accounts 取得本專案後端 service account JSON，存為 Vercel 伺服器端 `FIREBASE_SERVICE_ACCOUNT_JSON`。此憑證可管理 Auth／資料庫，不能加 VITE_、不能貼聊天或提交 Git。可使用只授予 Firebase Authentication Admin 與 Cloud Datastore User 的專用服務帳戶，避免授予 Google Cloud Owner。
+6. Authentication → Users，由擁有者親自建立第一個 Email／密碼帳號。取得 UID 後，本機 `.env.local` 設定服務憑證並執行：
 
 ```powershell
+npm run bootstrap -- YOUR_AUTH_UID
+```
+
+命令只允許首次執行，建立首位管理員與初始類別／頻道；没有公開管理員初始化 API。後續帳號從網站管理面板建立，密碼至少 12 字元。
+
+## Google Drive 設定
+
+使用具有 Google One 空間的 Google 帳戶授權，圖片屬於該帳戶 My Drive；Firebase service account 不持有圖片。
+
+1. Google Cloud Console 選 `harbor-9d3bc`，啟用 Google Drive API。
+2. 設定 Google Auth Platform 的 OAuth consent screen（外部使用者）。只需 `https://www.googleapis.com/auth/drive.file` 範圍，存取本應用程式建立／獲授權的檔案，不需完整 Drive 範圍。
+3. 建立 Web application OAuth client，Authorized redirect URI 完全等於：
+
+```text
+https://php-web-tan.vercel.app/api/workspace?action=drive-callback
+```
+
+4. Client ID／secret 填入 Vercel 伺服器環境變數。在自己的終端執行下方指令產生加密金鑰，填入 `DRIVE_TOKEN_ENCRYPTION_KEY` 並妥善保存，勿公開。變更金鑰後須重新授權 Drive。
+
+```powershell
+node -e "console.log(require('node:crypto').randomBytes(32).toString('base64'))"
+```
+
+5. Testing 狀態先加入 Drive 擁有者為 test user。此狀態的 Drive refresh token 通常 7 天到期；長期使用請完成適用 Google 要求並切換 Production，再重新授權。OAuth Production 不會將聊天室／資料夾公開。
+6. 部署後，管理員登入網站 → 管理面板 → Google Drive → 連接 Google Drive。擁有者同意授權後，建立 `Harbor private chat images` 資料夾。成員用聊天室帳號即可，不必登入 Google。
+
+不要公開分享或刪除圖片資料夾。重新授權使用原本可存取資料夾的 Google 帳戶，以保留歷史圖片。
+
+## Vercel 環境變數與部署
+
+| 名稱                          | 用途                                         |
+| ----------------------------- | -------------------------------------------- |
+| VITE_FIREBASE_API_KEY         | Firebase Web config apiKey                   |
+| VITE_FIREBASE_AUTH_DOMAIN     | harbor-9d3bc.firebaseapp.com                 |
+| VITE_FIREBASE_PROJECT_ID      | harbor-9d3bc                                 |
+| VITE_FIREBASE_APP_ID          | Firebase Web config appId                    |
+| FIREBASE_SERVICE_ACCOUNT_JSON | 完整後端憑證 JSON，只放伺服器                |
+| APP_ORIGIN                    | https://php-web-tan.vercel.app，不加尾端斜線 |
+| GOOGLE_DRIVE_CLIENT_ID        | Web OAuth client ID                          |
+| GOOGLE_DRIVE_CLIENT_SECRET    | Web OAuth client secret，只放伺服器          |
+| DRIVE_TOKEN_ENCRYPTION_KEY    | 32-byte 隨機值的 base64，只放伺服器          |
+| DISCORD_WEBHOOK_URL           | 選填，Discord Webhook，只放伺服器            |
+
+Vercel 匯入現有 GitHub repo `mkiitw123456/PHPWeb`，Framework Vite、build `npm run build`、output `dist`。`api/workspace.mjs` 為 Node.js Function，設定 60 秒上限。環境變數修改後要重新部署。前端與 API 必須使用同一 Firebase 專案。
+
+自訂網域須更新 APP_ORIGIN、Firebase authorized domains、OAuth redirect URI 並重新部署。Drive 授權只在 APP_ORIGIN 正式網域執行；Preview 不應共用正式憑證。此版需要 Vercel API，不能僅部署 dist 到純靜態主機。
+
+## 本機與驗證
+
+Node.js 22.12+，目前 Node 24 測試。
+
+```powershell
+npm ci
 npm run build
+npm test
+npm run test:rules
 ```
 
-將 `dist` 內容部署到支援 HTTPS 的靜態網站主機，綁定你的網域。亦可放在現有 Apache/Nginx/PHP 主機的網站根目錄，不需 PHP 程式。請勿把原始碼目錄當成 public root。此版預設部署於網域根路徑。
+規則測試需 Java 21+，使用 Firebase Emulator demo 專案，不碰正式資料。涵蓋跨類別／未登入／自行註冊拒絕、權限撤銷、角色升級攻擊、憑證禁止讀取與 API 驗證。模擬器不取代真實 OAuth、Drive、Discord 驗收。
 
-網域尚未購買不影響本機開發。網站網址可以被知道，但正式內容必须登入並通過 RLS 才能存取。單純隱藏網址不是權限保護。
+純本機示範：不填四個 VITE_FIREBASE 變數，`.env.local` 設 `VITE_DEMO_MODE=true` 後 `npm run dev`。示範無真實登入、資料存在瀏覽器。正式 Firebase 本機模式須有同源 API，可用 Vercel CLI `vercel dev`；單獨 Vite 不提供 API。
 
-## 流量與第一版界線
+## 費用與維運界線
 
-- 圖片上傳前即縮圖、WebP，僅儲存壓縮後版本；不另外保存原圖。避免每次載入整段聊天，歷史每頁 40 筆。已開啟頁面保留的歷史訊息不會重複抓取。
-- 權限／類別資料每 30 秒同步一次、頁面重新聚焦時同步；訊息走 Realtime。RLS 在伺服器立即生效，已下載到瀏覽器的內容無法收回；已簽發的圖片網址最長仍有效 5 分鐘。
-- Webhook 目前由傳訊息後呼叫 Edge Function，採 delivery claim 防止重複發送；不是可靠訊息佇列。網路中斷、Discord rate limit 或函式失敗會提示，不自動重送。需要保證送達時，下一版應改資料庫 outbox + 排程重試。
-- 提示音不是 Push Notification，不承諾關閉分頁仍有提示。
-- 第一版未提供刪除／編輯訊息、刪除類別、停權 UI、搜尋、檔案附件（僅圖片）；帳號停權／重設可在 Supabase 管理。介面支援繁體中文和 Filipino，但不翻譯成員的聊天內容。
-- 費用取決於圖片數量、尺寸、讀取次數與同時在線人数，未連接專案前不保證免費額度足夠。先以小團隊測試並從 Dashboard 監控儲存、傳出流量與 Realtime 使用量。
+- 10 人、每天 50 圖，若平均壓縮 300 KB，每月新增約 450 MB；每人看一次約 4.5 GB 圖片下載，另加文字及重複觀看。這是估算，不是免費保證。
+- Google One 容量不等於 Firebase／Vercel 免費額度。Firestore listener 初始載入、重連與權限依賴讀取會計量；中繼資料透過小型 revision 文件在變更時更新，回到頁面時也會同步，歷史分頁和圖片延遲載入減少傳輸。
+- 撤銷權限後新讀取／上傳會被拒絕，已下載內容無法收回。停權時同步設定 `profiles/{uid}.disabled=true` 並在 Firebase Auth 停用，讓 listener 規則也立即阻擋。
+- Discord 採防重複 claim，非可靠佇列，失敗不自動重試。訊息儲存後網路斷線時，先重新整理再決定是否重送。
+- 上傳失敗會清理圖片；清理失敗記錄 server-only `cleanup`。函式中途終止可能留下 Drive 孤立檔或 submissions pending，須管理員排查。過期 OAuth state 與完成的 submissions／notifications 可定期清理，不能刪除仍使用中的 images 記錄。
+- 第一版沒有訊息編輯／刪除、類別刪除、搜尋、一般檔案附件、背景 Push、停權／重設密碼 UI。密碼重設由 Firebase Console 處理。
+- 雲端驗收：兩個帳號互傳文字／圖片、撤銷類別後拒絕圖片讀取、Filipino 介面、音效開關、Webhook、登出禁止讀取。
 
-## 驗證
-
-`npm run build` 做 TypeScript 與 production build；`npm test` 在本機 PostgreSQL 相容 PGlite 中建立最小 Supabase schema 模擬，執行真實 migration 並驗證 RLS。它不取代雲端 Auth、Storage、Realtime、Edge Functions 整合測試。
-
-設計概念為 `design/concept.png`。原概念中的多伺服器／裝飾性成員、搜尋與附件樣式已依使用者的單一私人空間、純文字／圖片需求移除或調整。
-
-參考：
-
-- https://supabase.com/docs/guides/storage/security/access-control
-- https://supabase.com/docs/guides/storage/buckets/fundamentals
-- https://supabase.com/docs/reference/javascript/auth-admin-createuser
-- https://supabase.com/docs/guides/functions/auth-legacy-jwt
+官方參考：[安全規則](https://firebase.google.com/docs/firestore/security/get-started)、[Drive 檔案權限](https://developers.google.com/workspace/drive/api/guides/api-specific-auth)、[OAuth token 到期](https://developers.google.com/identity/protocols/oauth2#expiration)、[Vercel 限制](https://vercel.com/docs/functions/limitations)。

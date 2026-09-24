@@ -1,7 +1,7 @@
 import { t } from "./i18n";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { UserPlus, ShieldCheck, Check, Webhook } from "lucide-react";
-import { db, check, type Snapshot } from "./api";
+import { db, request, type Snapshot } from "./api";
 import { roleNames, type Role } from "./types";
 import { Avatar } from "./components";
 export default function Admin({
@@ -17,10 +17,24 @@ export default function Admin({
     [busy, setBusy] = useState(false),
     [selected, setSelected] = useState(""),
     [grants, setGrants] = useState<string[]>([]),
-    [notice, setNotice] = useState("");
+    [notice, setNotice] = useState(""),
+    [driveConnected, setDriveConnected] = useState<boolean | null>(null);
+  useEffect(() => {
+    if (tab === "drive" && db) {
+      request<{ connected: boolean }>("drive-status")
+        .then((r) => setDriveConnected(r.connected))
+        .catch((e) => onError(e.message));
+    }
+  }, [tab]);
   return (
     <>
       <div className="tabs">
+        <button
+          className={tab === "drive" ? "active" : ""}
+          onClick={() => setTab("drive")}
+        >
+          Google Drive
+        </button>
         <button
           className={tab === "members" ? "active" : ""}
           onClick={() => setTab("members")}
@@ -44,6 +58,45 @@ export default function Admin({
         </button>
       </div>
       <div className="modal-body">
+        {tab === "drive" && (
+          <div className="integration">
+            <h3>Google Drive</h3>
+            <p>
+              {t(
+                "圖片會存入你授權的 Google Drive 專用資料夾，檔案不會公開分享。",
+              )}
+            </p>
+            <p className="info">
+              {t(
+                driveConnected
+                  ? "Google Drive 已連接"
+                  : "Google Drive 尚未連接",
+              )}
+            </p>
+            <button
+              className="primary"
+              disabled={!db || busy}
+              onClick={async () => {
+                setBusy(true);
+                try {
+                  const result = await request<{ url: string }>("drive-start");
+                  window.location.assign(result.url);
+                } catch (e) {
+                  onError((e as Error).message);
+                  setBusy(false);
+                }
+              }}
+            >
+              {t(
+                driveConnected ? "重新授權 Google Drive" : "連接 Google Drive",
+              )}
+            </button>
+            <p className="muted">
+              {t("只有管理員需要授權 Google；一般成員使用聊天室帳號即可。")}
+            </p>
+            {!db && <small>{t("示範模式不會連接你的雲端硬碟。")}</small>}
+          </div>
+        )}
         {notice && (
           <p className="success" role="status">
             {t(notice)}
@@ -91,12 +144,10 @@ export default function Admin({
                     setBusy(true);
                     try {
                       if (db)
-                        check(
-                          await db.rpc("set_category_access", {
-                            target: selected,
-                            category_ids: grants,
-                          }),
-                        );
+                        await request("access", {
+                          target: selected,
+                          category_ids: grants,
+                        });
                       update({
                         ...data,
                         grants: [
@@ -155,18 +206,13 @@ export default function Admin({
                   category_ids = f.getAll("category") as string[];
                 let id = crypto.randomUUID();
                 if (db) {
-                  const r = check(
-                    await db.functions.invoke("admin-users", {
-                      body: {
-                        name,
-                        email: f.get("email"),
-                        password: f.get("password"),
-                        role,
-                        category_ids,
-                      },
-                    }),
-                  );
-                  if (r.error) throw new Error(r.error);
+                  const r = await request("create-user", {
+                    name,
+                    email: f.get("email"),
+                    password: f.get("password"),
+                    role,
+                    category_ids,
+                  });
                   id = r.id;
                 }
                 update({
@@ -185,7 +231,7 @@ export default function Admin({
                   db
                     ? t("帳號已建立，請私下提供帳密給成員。")
                     : t(
-                        "示範成員已建立；密碼不會保存，正式登入需連接 Supabase。",
+                        "示範成員已建立；密碼不會保存，正式登入需連接 Firebase。",
                       ),
                 );
               } catch (e) {
@@ -257,13 +303,13 @@ export default function Admin({
             <div className="info">
               {db
                 ? t(
-                    "伺服器端串接已備妥，請在 Supabase 設定 DISCORD_WEBHOOK_URL。",
+                    "伺服器端串接已備妥，請在 Vercel 設定 DISCORD_WEBHOOK_URL。",
                   )
                 : t("目前為本機示範，尚未連接通知服務。")}
             </div>
             <p className="muted">
               {t(
-                "Webhook 網址僅存於 Supabase Secrets。通知只包含「有新訊息」與工作空間連結，不轉送私人文字、圖片或類別名稱。",
+                "Webhook 網址僅存於 Vercel Secrets。通知只包含「有新訊息」與工作空間連結，不轉送私人文字、圖片或類別名稱。",
               )}
             </p>
             <small>

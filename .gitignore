@@ -6,4 +6,9 @@ dist/
 !.env.example
 .vercel/
 supabase/.temp/
+.firebase/
+*-debug.log
+*.service-account.json
+service-account*.json
+.secrets/
 test-results/

@@ -1,0 +1,15 @@
+rules_version = '2';
+service cloud.firestore {
+ match /databases/{database}/documents {
+  function member(){return request.auth != null && exists(/databases/$(database)/documents/profiles/$(request.auth.uid)) && get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.disabled == false;}
+  function profile(){return get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data;}
+  function categoryAccess(id){return member() && (profile().role == 'admin' || id in profile().category_ids);}
+  match /profiles/{uid} {allow get: if member() && request.auth.uid == uid;}
+  match /system/workspace {allow get: if member();}
+  match /channels/{channelId}/messages/{messageId} {
+   allow read: if categoryAccess(get(/databases/$(database)/documents/channels/$(channelId)).data.category_id);
+  }
+  // All writes, metadata, credentials, OAuth states and Drive file IDs are server-only.
+  match /{document=**} {allow read, write: if false;}
+ }
+}

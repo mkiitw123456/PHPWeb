@@ -1,9 +1,66 @@
-import { createClient } from "@supabase/supabase-js";
+import { initializeApp } from "firebase/app";
+import {
+  getAuth,
+  onAuthStateChanged,
+  signInWithEmailAndPassword,
+  signOut,
+} from "firebase/auth";
+import {
+  getFirestore,
+  collection,
+  query,
+  orderBy,
+  limit,
+  startAfter,
+  getDocs,
+  onSnapshot,
+  doc,
+  documentId,
+} from "firebase/firestore";
 import type { Category, Channel, Profile, Message, Grant } from "./types";
-const url = import.meta.env.VITE_SUPABASE_URL,
-  key = import.meta.env.VITE_SUPABASE_ANON_KEY;
-export const db = url && key ? createClient(url, key) : null;
-export const demo = !db;
+const config = {
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+};
+export const configured = Object.values(config).every(Boolean);
+export const demo =
+  import.meta.env.DEV &&
+  import.meta.env.VITE_DEMO_MODE === "true" &&
+  !configured;
+const app = configured ? initializeApp(config) : null;
+export const db = app ? getFirestore(app) : null;
+export const auth = app ? getAuth(app) : null;
+export const observeAuth = (fn: (uid: string) => void) =>
+  auth ? onAuthStateChanged(auth, (u) => fn(u?.uid || "")) : () => {};
+export const login = (email: string, password: string) =>
+  signInWithEmailAndPassword(auth!, email, password);
+export const logout = () => signOut(auth!);
+export async function request<T = any>(
+  action: string,
+  body: unknown = {},
+): Promise<T> {
+  const user = auth?.currentUser;
+  if (!user) throw new Error("Sign in required");
+  const token = await user.getIdToken();
+  const response = await fetch(
+    "/api/workspace?action=" + encodeURIComponent(action),
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: "Bearer " + token,
+      },
+      body: JSON.stringify(body),
+    },
+  );
+  const data = await response
+    .json()
+    .catch(() => ({ error: "Server request failed" }));
+  if (!response.ok) throw new Error(data.error || "Server request failed");
+  return data;
+}
 const seed = {
   profiles: [
     { id: "alex", name: "Alex", role: "admin" },
@@ -78,35 +135,101 @@ export function localData(): Snapshot {
 export function saveLocal(s: Snapshot) {
   localStorage.setItem("harbor-demo-v1", JSON.stringify(s));
 }
-export function check<T>(r: { data: T; error: unknown }): T {
-  if (r.error) throw r.error;
-  return r.data;
-}
+
 export async function snapshot(): Promise<Snapshot> {
-  if (!db) return localData();
-  const [profiles, categories, channels, grants] = await Promise.all(
-    ["profiles", "categories", "channels", "category_members"].map((t) =>
-      db!.from(t).select("*"),
-    ),
+  if (demo) return localData();
+  return request<Snapshot>("snapshot");
+}
+export async function history(channel: string, before?: Message) {
+  if (demo) return localData().messages.filter((m) => m.channel_id === channel);
+  if (!db) throw new Error("Firebase is not configured");
+  const base = collection(db, "channels", channel, "messages");
+  const q = before
+    ? query(
+        base,
+        orderBy("created_at", "desc"),
+        orderBy(documentId(), "desc"),
+        startAfter(before.created_at, before.id),
+        limit(40),
+      )
+    : query(
+        base,
+        orderBy("created_at", "desc"),
+        orderBy(documentId(), "desc"),
+        limit(40),
+      );
+  return (await getDocs(q)).docs.map((d) => d.data() as Message).reverse();
+}
+export function watchChannels(
+  channels: Channel[],
+  receive: (m: Message, quiet?: boolean) => void,
+  status: (value: boolean) => void,
+) {
+  if (!db) return () => {};
+  const connected = new Set<string>();
+  const unsubscribers = channels.map((channel) => {
+    let initial = true;
+    const seen = new Set<string>();
+    return onSnapshot(
+      query(
+        collection(db!, "channels", channel.id, "messages"),
+        orderBy("created_at", "desc"),
+        limit(40),
+      ),
+      (snap) => {
+        connected.add(channel.id);
+        status(connected.size === channels.length);
+        for (const change of snap.docChanges()) {
+          if (change.type === "added" && !seen.has(change.doc.id))
+            receive(change.doc.data() as Message, initial);
+          seen.add(change.doc.id);
+        }
+        initial = false;
+      },
+      () => {
+        connected.delete(channel.id);
+        status(false);
+      },
+    );
+  });
+  return () => unsubscribers.forEach((fn) => fn());
+}
+export function watchProfile(uid: string, change: () => void) {
+  if (!db) return () => {};
+  // One small revision document replaces periodic scans of all members/channels.
+  let timer: ReturnType<typeof setTimeout>;
+  const refresh = () => {
+    clearTimeout(timer);
+    timer = setTimeout(change, 100);
+  };
+  const stopProfile = onSnapshot(doc(db, "profiles", uid), refresh, refresh);
+  const stopWorkspace = onSnapshot(
+    doc(db, "system", "workspace"),
+    refresh,
+    refresh,
   );
-  return {
-    profiles: check(profiles) || [],
-    categories: check(categories) || [],
-    channels: check(channels) || [],
-    grants: check(grants) || [],
-    messages: [],
+  return () => {
+    clearTimeout(timer);
+    stopProfile();
+    stopWorkspace();
   };
 }
-export async function history(channel: string, before?: string) {
-  if (!db) return localData().messages.filter((m) => m.channel_id === channel);
-  let q = db
-    .from("messages")
-    .select("*")
-    .eq("channel_id", channel)
-    .order("created_at", { ascending: false })
-    .limit(40);
-  if (before) q = q.lt("created_at", before);
-  return (check(await q) || []).reverse() as Message[];
+export async function loadImage(id: string) {
+  const token = await auth!.currentUser!.getIdToken();
+  const response = await fetch(
+    "/api/workspace?action=image&id=" + encodeURIComponent(id),
+    { headers: { Authorization: "Bearer " + token }, cache: "no-store" },
+  );
+  if (!response.ok) throw new Error("Image unavailable");
+  return URL.createObjectURL(await response.blob());
+}
+export async function sendMessage(message: Message, image?: string) {
+  return request<{ message: Message; notification: string }>("send", {
+    id: message.id,
+    channel_id: message.channel_id,
+    body: message.body,
+    image,
+  });
 }
 export async function compressImage(file: File) {
   if (!["image/jpeg", "image/png", "image/webp"].includes(file.type))

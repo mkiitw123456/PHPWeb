@@ -25,7 +25,13 @@ import {
   saveLocal,
   snapshot,
   history,
-  check,
+  configured,
+  observeAuth,
+  logout,
+  watchChannels,
+  watchProfile,
+  request,
+  sendMessage,
   compressImage,
   dataUrl,
   type Snapshot,
@@ -123,31 +129,32 @@ export default function App() {
       const s = await snapshot();
       if (requestedUser === userRef.current) setData(s);
     } catch (e) {
+      if (
+        requestedUser === userRef.current &&
+        e instanceof Error &&
+        [
+          "Workspace access is not enabled",
+          "Session expired",
+          "Sign in required",
+        ].includes(e.message)
+      ) {
+        setData(empty);
+        setMessages([]);
+        close();
+      }
       fail(e);
     }
   }
   useEffect(() => {
     if (!db) return;
-    let mounted = true;
-    db.auth.getSession().then(({ data: { session } }) => {
-      if (mounted) {
-        setUid(session?.user.id || "");
-        setReady(true);
-      }
-    });
-    const {
-      data: { subscription },
-    } = db.auth.onAuthStateChange((_event, s) => {
-      setUid(s?.user.id || "");
-      if (!s) {
+    return observeAuth((next) => {
+      setUid(next);
+      setReady(true);
+      if (!next) {
         setData(empty);
         setMessages([]);
       }
     });
-    return () => {
-      mounted = false;
-      subscription.unsubscribe();
-    };
   }, []);
   useEffect(() => {
     if (uid && !demo) void reload();
@@ -202,16 +209,16 @@ export default function App() {
     osc.start();
     osc.stop(a.currentTime + 0.23);
   }
-  function receive(m: Message) {
+  function receive(m: Message, quiet = false) {
     if (m.channel_id === current.current)
       setMessages((ms) =>
         ms.some((x) => x.id === m.id)
           ? ms
           : [...ms, m].sort((a, b) => a.created_at.localeCompare(b.created_at)),
       );
-    else
+    else if (!quiet)
       setUnread((u) => ({ ...u, [m.channel_id]: (u[m.channel_id] || 0) + 1 }));
-    if (m.user_id !== userRef.current) beep();
+    if (!quiet && m.user_id !== userRef.current) beep();
   }
   useEffect(() => {
     const unlock = () => {
@@ -241,57 +248,28 @@ export default function App() {
               )
             );
           })
-          .forEach(receive);
+          .forEach((m) => receive(m));
         setData(next);
       };
       window.addEventListener("storage", sync);
       return () => window.removeEventListener("storage", sync);
     }
-    const sub = db
-      .channel("workspace-messages")
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "messages" },
-        (p) => receive(p.new as Message),
-      )
-      .subscribe((status) => {
-        setLive(
-          status === "SUBSCRIBED"
-            ? t("即時連線")
-            : status === "CHANNEL_ERROR"
-              ? t("連線中斷")
-              : t("連線中"),
-        );
-        if (status === "SUBSCRIBED" && current.current) {
-          const cid = current.current;
-          history(cid)
-            .then((ms) => {
-              if (current.current === cid) setMessages(ms);
-            })
-            .catch(fail);
-        }
-      });
+    const stop = watchProfile(uid, () => void reload());
     const refresh = () => {
-      if (document.visibilityState === "visible") {
-        void reload();
-        if (current.current) {
-          const cid = current.current;
-          history(cid)
-            .then((ms) => {
-              if (current.current === cid) setMessages(ms);
-            })
-            .catch(fail);
-        }
-      }
+      if (document.visibilityState === "visible") void reload();
     };
     document.addEventListener("visibilitychange", refresh);
-    const timer = window.setInterval(() => void reload(), 30000);
     return () => {
-      void db!.removeChannel(sub);
-      clearInterval(timer);
+      stop();
       document.removeEventListener("visibilitychange", refresh);
     };
   }, [uid]);
+  useEffect(() => {
+    if (!db || !uid) return;
+    return watchChannels(channels, receive, (ok) =>
+      setLive(ok ? t("即時連線") : t("連線中斷")),
+    );
+  }, [uid, channels.map((c) => c.id).join(",")]);
   useEffect(() => {
     if (stick.current) bottom.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, loading]);
@@ -324,20 +302,8 @@ export default function App() {
     setBusy(true);
     const channelId = image?.channel || channel;
     let path: string | null = null;
-    let committed = false;
     try {
-      if (image) {
-        path = demo
-          ? image.url
-          : `${channelId}/${uid}/${crypto.randomUUID()}.webp`;
-        if (db)
-          check(
-            await db.storage.from("chat-images").upload(path, image.blob, {
-              contentType: "image/webp",
-              cacheControl: "3600",
-            }),
-          );
-      }
+      if (image) path = demo ? image.url : null;
       const message: Message = {
         id: crypto.randomUUID(),
         channel_id: channelId,
@@ -347,19 +313,12 @@ export default function App() {
         created_at: new Date().toISOString(),
       };
       if (db) {
-        const saved = check(
-          await db.from("messages").insert(message).select().single(),
-        ) as Message;
-        committed = true;
-        receive(saved);
-        void db.functions
-          .invoke("notify", { body: { message_id: saved.id } })
-          .then(({ data, error }) => {
-            if (error || data?.error)
-              setToast(t("訊息已傳送；Discord 通知失敗。"));
-            else if (data?.status === "not_configured")
-              setToast(t("訊息已傳送；尚未設定 Discord Webhook。"));
-          });
+        const result = await sendMessage(message, image?.url);
+        receive(result.message);
+        if (result.notification === "failed")
+          setToast(t("訊息已傳送；Discord 通知失敗。"));
+        else if (result.notification === "not_configured")
+          setToast(t("訊息已傳送；尚未設定 Discord Webhook。"));
       } else {
         const next = {
           ...localData(),
@@ -367,19 +326,25 @@ export default function App() {
         };
         update(next);
         receive(message);
-        committed = true;
       }
       setText("");
       close();
       stick.current = true;
     } catch (e) {
-      if (path && db && !committed)
-        await db.storage.from("chat-images").remove([path]);
       fail(e);
     } finally {
       setBusy(false);
     }
   }
+  if (!configured && !demo)
+    return (
+      <div className="login">
+        <LanguagePicker />
+        <ShieldCheck size={44} />
+        <h1>{t("工作空間尚未啟用")}</h1>
+        <p>{t("管理員正在設定 Firebase，完成後才會開放帳密登入。")}</p>
+      </div>
+    );
   if (!ready) return <Busy />;
   if (!uid) return <Login onLogin={() => void reload()} />;
   if (!me && !demo)
@@ -391,7 +356,7 @@ export default function App() {
         <p>{t("若你是首位管理員，請依 README 建立管理員資料。")}</p>
         {error && <p className="error">{t(error)}</p>}
         <button onClick={() => void reload()}>{t("重新載入")}</button>
-        <button onClick={() => void db!.auth.signOut()}>{t("登出")}</button>
+        <button onClick={() => void logout()}>{t("登出")}</button>
       </div>
     );
   const visiblePeople = data.profiles.filter(
@@ -622,7 +587,7 @@ export default function App() {
                 setLoading(true);
                 stick.current = false;
                 try {
-                  const old = await history(channel, messages[0]?.created_at);
+                  const old = await history(channel, messages[0]);
                   setMessages((ms) => [...old, ...ms]);
                   setMore(old.length === 40);
                 } catch (e) {
@@ -809,7 +774,7 @@ export default function App() {
               {t(live)}
               <small>
                 {demo
-                  ? t("連接 Supabase 後啟用多人聊天")
+                  ? t("連接 Firebase 後啟用多人聊天")
                   : t("訊息與圖片依類別權限保護")}
               </small>
             </span>
@@ -853,8 +818,9 @@ export default function App() {
                   ...(table === "channels" ? { category_id: category } : {}),
                 };
                 if (db)
-                  item = check(
-                    await db.from(table).insert(item).select().single(),
+                  item = await request(
+                    table === "categories" ? "category" : "channel",
+                    item,
                   );
                 update({ ...data, [table]: [...data[table], item] });
                 if (table === "channels") setChannel(item.id);
@@ -943,7 +909,7 @@ export default function App() {
               <button
                 className="manage"
                 onClick={async () => {
-                  await db!.auth.signOut();
+                  await logout();
                   close();
                 }}
               >
@@ -1014,7 +980,7 @@ export default function App() {
           <div className="modal-body">
             <p>
               {t(
-                "清除這台瀏覽器內的示範訊息與設定，恢復初始示範對話。這不會影響 Supabase 資料。",
+                "清除這台瀏覽器內的示範訊息與設定，恢復初始示範對話。這不會影響 Firebase 資料。",
               )}
             </p>
             <footer>

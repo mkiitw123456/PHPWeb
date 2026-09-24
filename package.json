@@ -7,24 +7,29 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview --host 127.0.0.1",
-    "test": "node --test tests/*.test.mjs"
+    "test": "node --test tests/*.test.mjs",
+    "test:rules": "firebase emulators:exec --only firestore,auth --project demo-harbor \"node --test --test-concurrency=1 tests/firestore.integration.mjs tests/api.integration.mjs\"",
+    "bootstrap": "node --env-file=.env.local scripts/bootstrap.mjs"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "module",
   "dependencies": {
-    "@supabase/supabase-js": "^2.117.1",
+    "firebase": "^12.19.0",
+    "firebase-admin": "^14.5.0",
+    "google-auth-library": "^11.1.0",
     "lucide-react": "^1.47.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0"
   },
   "devDependencies": {
     "@babel/parser": "^7.29.9",
-    "@electric-sql/pglite": "^0.5.8",
+    "@firebase/rules-unit-testing": "^5.0.2",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.1",
+    "firebase-tools": "^15.31.0",
     "prettier": "^3.9.9",
     "typescript": "^7.0.2",
     "vite": "^8.3.0"

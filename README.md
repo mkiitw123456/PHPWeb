@@ -12,6 +12,8 @@
 - Discord Webhook 由後端送出通用通知與网站連結，不帶私密文字／圖片。通知失敗不會讓已保存訊息消失。
 - 正式建置缺少 Firebase 設定時顯示「工作空間尚未啟用」，不會自動進入示範管理員。
 
+登入只需帳號＋密碼，帳號 3–32 字元（英文字母、數字、底線），不分大小寫。前後端使用相同的內部地址映射交給 Firebase 驗證，密碼不寫在前端或儲存庫。首位管理員初始化命令會把指定 UID 對應到 Ricky。
+
 ## 專案與 Firebase 設定
 
 Firebase project：`harbor-9d3bc`；Firestore Standard、`(default)`、新加坡 `asia-southeast1`。Vercel：`https://php-web-tan.vercel.app`。以下設定實際完成後才能多人使用，儲存庫沒有正式憑證，也不自動建立正式管理員。
@@ -27,17 +29,17 @@ npx firebase deploy --only firestore:rules,firestore:indexes --project harbor-9d
 
 4. Project settings → Your apps → Harbor Web，取得四個前端設定，填到 `.env.local`／Vercel Environment Variables（下表）。Web API key 是公開前端設定，資料保護由規則和後端驗證提供。
 5. Project settings → Service accounts 取得本專案後端 service account JSON，存為 Vercel 伺服器端 `FIREBASE_SERVICE_ACCOUNT_JSON`。此憑證可管理 Auth／資料庫，不能加 VITE_、不能貼聊天或提交 Git。可使用只授予 Firebase Authentication Admin 與 Cloud Datastore User 的專用服務帳戶，避免授予 Google Cloud Owner。
-6. Authentication → Users，由擁有者親自建立第一個 Email／密碼帳號。取得 UID 後，本機 `.env.local` 設定服務憑證並執行：
+6. Authentication → Users，由擁有者親自建立第一個 Firebase 驗證帳號（可以使用內部識別地址 ricky@login.harbor.invalid，不需真實信箱）。取得 UID 後，本機 `.env.local` 設定服務憑證並執行：
 
 ```powershell
-npm run bootstrap -- YOUR_AUTH_UID
+npm run bootstrap -- YOUR_AUTH_UID Ricky
 ```
 
-命令只允許首次執行，建立首位管理員與初始類別／頻道；没有公開管理員初始化 API。後續帳號從網站管理面板建立，密碼至少 12 字元。
+命令只允許首次執行，建立首位管理員與初始類別／頻道；没有公開管理員初始化 API。後續帳號從網站管理面板建立，密碼至少 8 字元。
 
 ## Google Drive 設定
 
-使用具有 Google One 空間的 Google 帳戶授權，圖片屬於該帳戶 My Drive；Firebase service account 不持有圖片。
+使用具有 Google One 空間的 Google 帳戶授權（可以與 Firebase 專案擁有者是不同帳號），圖片屬於該帳戶 My Drive；Firebase service account 不持有圖片。
 
 1. Google Cloud Console 選 `harbor-9d3bc`，啟用 Google Drive API。
 2. 設定 Google Auth Platform 的 OAuth consent screen（外部使用者）。只需 `https://www.googleapis.com/auth/drive.file` 範圍，存取本應用程式建立／獲授權的檔案，不需完整 Drive 範圍。
@@ -99,7 +101,7 @@ npm run test:rules
 - 撤銷權限後新讀取／上傳會被拒絕，已下載內容無法收回。停權時同步設定 `profiles/{uid}.disabled=true` 並在 Firebase Auth 停用，讓 listener 規則也立即阻擋。
 - Discord 採防重複 claim，非可靠佇列，失敗不自動重試。訊息儲存後網路斷線時，先重新整理再決定是否重送。
 - 上傳失敗會清理圖片；清理失敗記錄 server-only `cleanup`。函式中途終止可能留下 Drive 孤立檔或 submissions pending，須管理員排查。過期 OAuth state 與完成的 submissions／notifications 可定期清理，不能刪除仍使用中的 images 記錄。
-- 第一版沒有訊息編輯／刪除、類別刪除、搜尋、一般檔案附件、背景 Push、停權／重設密碼 UI。密碼重設由 Firebase Console 處理。
+- 第一版沒有訊息編輯／刪除、類別刪除、搜尋、一般檔案附件、背景 Push、停權／重設密碼 UI。內部地址不收信，不能用 Email 寄送重設密碼；由管理員使用 Firebase Admin SDK 重設。
 - 雲端驗收：兩個帳號互傳文字／圖片、撤銷類別後拒絕圖片讀取、Filipino 介面、音效開關、Webhook、登出禁止讀取。
 
 官方參考：[安全規則](https://firebase.google.com/docs/firestore/security/get-started)、[Drive 檔案權限](https://developers.google.com/workspace/drive/api/guides/api-specific-auth)、[OAuth token 到期](https://developers.google.com/identity/protocols/oauth2#expiration)、[Vercel 限制](https://vercel.com/docs/functions/limitations)。

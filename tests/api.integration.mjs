@@ -62,14 +62,12 @@ test("server API verifies identity, role, category, idempotency and revocation",
   await store
     .doc(`profiles/${adminId}`)
     .set({ name: "Admin", role: "admin", disabled: false, category_ids: [] });
-  await store
-    .doc(`profiles/${playerId}`)
-    .set({
-      name: "Player",
-      role: "player",
-      disabled: false,
-      category_ids: ["api-general"],
-    });
+  await store.doc(`profiles/${playerId}`).set({
+    name: "Player",
+    role: "player",
+    disabled: false,
+    category_ids: ["api-general"],
+  });
   await store.doc("categories/api-general").set({ name: "General" });
   await store.doc("categories/api-secret").set({ name: "Secret" });
   await store
@@ -137,12 +135,27 @@ test("server API verifies identity, role, category, idempotency and revocation",
   assert.equal((await call("send", admin, input)).status, 409);
   const created = await call("create-user", admin, {
     name: "Member",
-    email: "member@example.test",
-    password: "test-only-password-123",
+    username: "Member",
+    password: "test1234",
     role: "user",
     category_ids: ["api-general"],
   });
   assert.equal(created.status, 200);
+  assert.equal(
+    (await auth.getUser(created.body.id)).email,
+    "member@login.harbor.invalid",
+  );
+  assert.equal(
+    (
+      await call("create-user", admin, {
+        name: "Duplicate",
+        username: "MEMBER",
+        password: "test1234",
+        role: "user",
+      })
+    ).status,
+    409,
+  );
   assert.equal(
     (await store.doc(`profiles/${created.body.id}`).get()).data().role,
     "user",
@@ -151,7 +164,7 @@ test("server API verifies identity, role, category, idempotency and revocation",
     (
       await call("create-user", admin, {
         name: "No",
-        email: "no@example.test",
+        username: "invalid_admin",
         password: "test-only-password-123",
         role: "admin",
       })

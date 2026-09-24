@@ -1,7 +1,10 @@
 // Run locally with server credentials; never shipped as a public admin bootstrap endpoint.
 import { services } from "../server/firebase.mjs";
 import { validId } from "../server/policy.mjs";
+import { usernameEmail } from "../shared/identity.mjs";
 const uid = validId(process.argv[2]);
+const username = process.argv[3];
+const email = usernameEmail(username);
 const { auth, store } = services();
 const user = await auth.getUser(uid);
 const admins = await store
@@ -11,11 +14,12 @@ const admins = await store
   .get();
 if (!admins.empty)
   throw new Error("An admin already exists. Bootstrap is disabled.");
+await auth.updateUser(uid, { email, displayName: username.trim() });
 await store.runTransaction(async (tx) => {
   const lock = store.doc("system/bootstrap");
   if ((await tx.get(lock)).exists) throw new Error("Already bootstrapped");
   tx.create(store.doc(`profiles/${uid}`), {
-    name: user.displayName || "Admin",
+    name: username.trim(),
     role: "admin",
     category_ids: [],
     disabled: false,

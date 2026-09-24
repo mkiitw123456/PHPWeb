@@ -1,5 +1,15 @@
 // Filipino (Tagalog) UI. User-authored names and messages are never translated.
 export const filipino: Record<string, string> = {
+  帳號: "Username",
+  "3–32 個英文字母、數字或底線": "3–32 titik (A–Z), numero o underscore",
+  "帳號需為 3–32 個英文字母、數字或底線":
+    "Gumamit ng 3–32 titik (A–Z), numero o underscore para sa username.",
+  "至少 8 個字元": "Hindi bababa sa 8 character",
+  "請填寫帳號、姓名及至少 8 字元密碼":
+    "Maglagay ng username, pangalan, at password na may hindi bababa sa 8 character.",
+  帳號已存在: "Ginagamit na ang username.",
+  "請選擇有雲端空間的 Google 帳號，可以與 Firebase 帳號不同。":
+    "Piliin ang Google account na may storage. Maaari itong iba sa account para sa Firebase.",
   工作空間尚未啟用: "Hindi pa handa ang workspace",
   "管理員正在設定 Firebase，完成後才會開放帳密登入。":
     "Sine-set up pa ng admin ang Firebase. Makakapag-sign in kapag handa na.",
@@ -18,7 +28,7 @@ export const filipino: Record<string, string> = {
   "跨越海域，讓合作更簡單。": "Mas madaling pagtutulungan, saanman naroon.",
   "跨越海域，讓合作更簡單": "Mas madaling pagtutulungan",
   "登入失敗，請確認帳號密碼或網路連線。":
-    "Hindi makapag-sign in. Suriin ang email, password, at koneksyon.",
+    "Hindi makapag-sign in. Suriin ang username, password, at koneksyon.",
   "Email 帳號": "Email",
   密碼: "Password",
   "登入中…": "Nagsa-sign in…",
@@ -48,7 +58,7 @@ export const filipino: Record<string, string> = {
   類別權限已儲存: "Na-save na ang mga pahintulot.",
   儲存權限: "I-save ang access",
   "帳號已建立，請私下提供帳密給成員。":
-    "Nagawa na ang account. Ibigay nang pribado ang email at password sa miyembro.",
+    "Nagawa na ang account. Ibigay nang pribado ang username at password sa miyembro.",
   "示範成員已建立；密碼不會保存，正式登入需連接 Firebase。":
     "Nagawa na ang demo account. Hindi sine-save ang password. Kailangan ang Firebase para sa tunay na pag-sign in.",
   顯示名稱: "Pangalan sa chat",

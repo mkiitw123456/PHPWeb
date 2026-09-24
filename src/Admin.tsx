@@ -94,6 +94,9 @@ export default function Admin({
             <p className="muted">
               {t("只有管理員需要授權 Google；一般成員使用聊天室帳號即可。")}
             </p>
+            <p className="muted">
+              {t("請選擇有雲端空間的 Google 帳號，可以與 Firebase 帳號不同。")}
+            </p>
             {!db && <small>{t("示範模式不會連接你的雲端硬碟。")}</small>}
           </div>
         )}
@@ -208,7 +211,7 @@ export default function Admin({
                 if (db) {
                   const r = await request("create-user", {
                     name,
-                    email: f.get("email"),
+                    username: f.get("username"),
                     password: f.get("password"),
                     role,
                     category_ids,
@@ -251,12 +254,18 @@ export default function Admin({
               />
             </label>
             <label>
-              {t("Email 帳號")}
+              {t("帳號")}
               <input
-                name="email"
-                type="email"
+                name="username"
+                type="text"
+                autoComplete="off"
+                autoCapitalize="none"
+                spellCheck={false}
+                pattern="[a-zA-Z0-9_]{3,32}"
+                minLength={3}
+                maxLength={32}
                 required
-                placeholder="member@example.com"
+                placeholder={t("3–32 個英文字母、數字或底線")}
               />
             </label>
             <label>
@@ -264,10 +273,10 @@ export default function Admin({
               <input
                 name="password"
                 type="password"
-                minLength={12}
+                minLength={8}
                 autoComplete="new-password"
                 required
-                placeholder={t("至少 12 個字元")}
+                placeholder={t("至少 8 個字元")}
               />
             </label>
             <label>

@@ -1,4 +1,5 @@
 import { initializeApp } from "firebase/app";
+import { usernameEmail } from "../shared/identity.mjs";
 import {
   getAuth,
   onAuthStateChanged,
@@ -34,8 +35,8 @@ export const db = app ? getFirestore(app) : null;
 export const auth = app ? getAuth(app) : null;
 export const observeAuth = (fn: (uid: string) => void) =>
   auth ? onAuthStateChanged(auth, (u) => fn(u?.uid || "")) : () => {};
-export const login = (email: string, password: string) =>
-  signInWithEmailAndPassword(auth!, email, password);
+export const login = (username: string, password: string) =>
+  signInWithEmailAndPassword(auth!, usernameEmail(username), password);
 export const logout = () => signOut(auth!);
 export async function request<T = any>(
   action: string,

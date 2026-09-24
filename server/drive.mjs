@@ -66,7 +66,7 @@ export async function startDrive(profile, res) {
   return {
     url: client.generateAuthUrl({
       access_type: "offline",
-      prompt: "consent",
+      prompt: "consent select_account",
       scope: ["https://www.googleapis.com/auth/drive.file"],
       state,
       code_challenge: createHash("sha256").update(verifier).digest("base64url"),

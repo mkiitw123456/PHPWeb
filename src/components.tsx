@@ -97,7 +97,7 @@ export function Login({ onLogin }: { onLogin: () => void }) {
           setError("");
           const f = new FormData(e.currentTarget);
           try {
-            await login(String(f.get("email")), String(f.get("password")));
+            await login(String(f.get("username")), String(f.get("password")));
             onLogin();
           } catch {
             setError(t("登入失敗，請確認帳號密碼或網路連線。"));
@@ -107,8 +107,16 @@ export function Login({ onLogin }: { onLogin: () => void }) {
         }}
       >
         <label>
-          {t("Email 帳號")}
-          <input name="email" type="email" autoComplete="username" required />
+          {t("帳號")}
+          <input
+            name="username"
+            type="text"
+            autoComplete="username"
+            autoCapitalize="none"
+            spellCheck={false}
+            maxLength={32}
+            required
+          />
         </label>
         <label>
           {t("密碼")}

@@ -1,4 +1,5 @@
 import { caller, services } from "../server/firebase.mjs";
+import { usernameEmail } from "../shared/identity.mjs";
 import {
   HttpError,
   requireAdmin,
@@ -253,20 +254,25 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true });
     }
     if (action === "create-user") {
+      let email;
+      try {
+        email = usernameEmail(input.username);
+      } catch (e) {
+        throw new HttpError(400, e.message);
+      }
       const name = nameValue(input.name),
         ids = await validateCategories(input.category_ids || []);
       if (
         !["user", "player"].includes(input.role) ||
-        typeof input.email !== "string" ||
         typeof input.password !== "string" ||
-        input.password.length < 12 ||
+        input.password.length < 8 ||
         input.password.length > 128
       )
-        throw new HttpError(400, "請填寫有效 Email、姓名及至少 12 字元密碼");
+        throw new HttpError(400, "請填寫帳號、姓名及至少 8 字元密碼");
       let user;
       try {
         user = await auth.createUser({
-          email: input.email,
+          email,
           password: input.password,
           displayName: name,
           emailVerified: false,
@@ -284,7 +290,7 @@ export default async function handler(req, res) {
       } catch (e) {
         if (user) await auth.deleteUser(user.uid);
         if (e.code === "auth/email-already-exists")
-          throw new HttpError(409, "Email already exists");
+          throw new HttpError(409, "帳號已存在");
         throw e;
       }
     }

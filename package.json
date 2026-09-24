@@ -4,6 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
+    "postinstall": "node scripts/patch-jwks.mjs",
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview --host 127.0.0.1",
